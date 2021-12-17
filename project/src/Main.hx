@@ -2,8 +2,6 @@ package;
 
 import haxe.io.BytesOutput;
 import haxe.io.Path;
-import format.tgz.Reader ;
-import format.tar.Writer;
 import sys.io.File;
 import sys.FileSystem;
 import tink.http.Fetch;
@@ -49,7 +47,11 @@ class Main {
                         if (target == null) {
                             target = "dev";
                         }
-						url = 'https://build.haxe.org/builds/haxe/$platform/haxe_latest.tar.gz';
+						url = 'https://build.haxe.org/builds/haxe/$platform/haxe_latest';
+                        if (platform  == "windows") 
+                            url += ".zip"
+                        else 
+                            url += ".tar.gz";
                         filename = "haxe_latest";
                     case "nightly":
                         target = args[2];
@@ -57,7 +59,11 @@ class Main {
                             target = args[1];
                         }
 
-						url = 'https://build.haxe.org/builds/haxe/$platform/haxe_${args[1]}.tar.gz';
+						url = 'https://build.haxe.org/builds/haxe/$platform/haxe_${args[1]}';
+						if (platform == "windows")
+							url += ".zip"
+						else
+							url += ".tar.gz";
                         filename = 'haxe_${args[1]}';
                     case file if (FileSystem.exists(file) && !FileSystem.isDirectory(file)): 
                         target = args[1];
@@ -85,15 +91,7 @@ class Main {
                         Sys.setCwd(Path.normalize('$root/../releases'));
                         switch (platform) {
                             case "windows": 
-                                for (entry in zdata) {
-                                    haxe.zip.Tools.uncompress(entry);
-                                    if (entry.data == null || entry.fileSize == 0) {
-                                        FileSystem.createDirectory(entry.fileName);
-                                    } else {
-										File.saveBytes(entry.fileName, entry.data);
-                                    }
-                                    
-                                }
+                                
                             default: 
 							    extractTar(tdata);
                         }
@@ -113,8 +111,20 @@ class Main {
                             target = args[0];
                         }
                         var thingie = args[0];
-						url = 'https://github.com/HaxeFoundation/haxe/releases/download/$thingie/haxe-$thingie-$platform.tar.gz';
-                        filename = 'haxe-$thingie-$platform';
+                        var goodPlatform = switch (platform) {
+                            case "windows": 
+                                "win";
+                            case "mac": 
+                                "osx";
+                            default: 
+                                "linux64";
+                        }
+						url = 'https://github.com/HaxeFoundation/haxe/releases/download/$thingie/haxe-$thingie-$goodPlatform';
+						if (platform == "windows")
+							url += ".zip"
+						else
+							url += ".tar.gz";
+                        filename = 'haxe-$thingie-$goodPlatform';
                         
                         
                         
@@ -124,16 +134,35 @@ class Main {
                 var oldCwd = Sys.getCwd();
                 Sys.setCwd(Path.join([root, "../releases"]));
                 safeDelete('$filename.tar.gz');
+                safeDelete('$filename.zip');
+                
                 tink.http.Client.fetch(url).all().handle((cb) -> {
                     switch (cb) {
                         case Success(data):
-                            File.saveBytes('$filename.tar.gz', data.body);
-							var goodFile = File.read(filename + ".tar.gz");
-							var data = new Reader(goodFile).read();
-							var outdir = data.first().fileName;
+                            if (platform == "windows")
+                                File.saveBytes('$filename.zip', data.body);
+                            else 
+                                File.saveBytes('$filename.tar.gz', data.body);
+                            
+							var goodFile = if (platform == "windows") File.read('$filename.zip') else File.read(filename + ".tar.gz");
+                            var outdir = null;
+							var zdata = null;
+							var tdata = null;
+							switch (platform) {
+								case "windows":
+									zdata = haxe.zip.Reader.readZip(goodFile);
+									outdir = zdata.first().fileName;
+								default:
+									tdata = new format.tgz.Reader(goodFile).read();
+									outdir = tdata.first().fileName;
+							}
                             goodFile.close();
-                            extractTar(data);
+                            if (platform == "windows")
+                                extractZip(zdata);
+                            else 
+                                extractTar(tdata);
                             safeDelete(filename + ".tar.gz");
+                            safeDelete('$filename.zip');
                             Sys.setCwd(oldCwd);
                             safeDelete('$root/../versions/$target');
                             link(Path.join([root, "../versions/", target]), Path.join([root, "../releases/", outdir]));
@@ -192,6 +221,16 @@ class Main {
             }
         }
     }
+    static function extractZip(data:List<haxe.zip.Entry>) {
+		for (entry in data) {
+			haxe.zip.Tools.uncompress(entry);
+			if (entry.data == null || entry.fileSize == 0) {
+				FileSystem.createDirectory(entry.fileName);
+			} else {
+				File.saveBytes(entry.fileName, entry.data);
+			}
+		}
+    }
     static function safeDelete(file:String) {
         if (FileSystem.exists(file))
             FileSystem.deleteFile(file);
@@ -199,18 +238,24 @@ class Main {
     static function link(to:String, from:String, file:Bool = false) {
         switch (Sys.systemName()) {
             case "Windows": 
+                var result = 0;
                 if (file) {
-                    Sys.command("mklink", [
+                    result = Sys.command("mklink", [
                         to,
                         from
                     ]);
                 }   
                 else  {
-                    Sys.command("mklink", [
+                    result = Sys.command("mklink", [
                         "/d",
                         to,
                         from,
                     ]);
+                }
+                if (result != 0) {
+                    Sys.println("Windows requires admin privledges to link files (stupid, i know)");
+                    Sys.println("Please run this command as an admin");
+                    Sys.exit(1);
                 }
                     
             default: 
