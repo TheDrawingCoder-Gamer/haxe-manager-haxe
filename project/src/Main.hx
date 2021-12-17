@@ -63,8 +63,19 @@ class Main {
                         target = args[1];
                         var realpath = FileSystem.absolutePath(file);
                         var goodFile = File.read(realpath);
-						var data = new Reader(goodFile).read();
-						var outdir = data.first().fileName;
+                        // TODO: Windows are actually zip files
+                        // meaning this will always fail : (
+						var outdir;
+                        var zdata = null;
+                        var tdata = null;
+                        switch (platform) {
+                            case "windows": 
+                                zdata = haxe.zip.Reader.readZip(goodFile);
+                                outdir = zdata.first().fileName;
+                            default: 
+                                tdata = new format.tgz.Reader(goodFile).read();
+                                outdir = tdata.first().fileName;
+                        }
                         goodFile.close();
                         if (target == null) {
                             Sys.println("Cannot install from local file without providing version");
@@ -72,8 +83,21 @@ class Main {
                         }
                         var oldCwd = Sys.getCwd();
                         Sys.setCwd(Path.normalize('$root/../releases'));
+                        switch (platform) {
+                            case "windows": 
+                                for (entry in zdata) {
+                                    haxe.zip.Tools.uncompress(entry);
+                                    if (entry.data == null || entry.fileSize == 0) {
+                                        FileSystem.createDirectory(entry.fileName);
+                                    } else {
+										File.saveBytes(entry.fileName, entry.data);
+                                    }
+                                    
+                                }
+                            default: 
+							    extractTar(tdata);
+                        }
                         
-                        extractTar(data);
 
                         Sys.setCwd(oldCwd);
                         if (FileSystem.exists(Path.join([root, '../versions/$target'])))
@@ -135,6 +159,10 @@ class Main {
 						safeDelete('$root/../std');
 						link('$root/../bin/haxe', '$root/../releases/${args[0]}/haxe', true);
 						link('$root/../bin/haxelib', '$root/../releases/${args[0]}/haxelib', true);
+                        if (platform != "windows") {
+							Sys.command("chmod +x", ['$root/../bin/haxe']);
+							Sys.command("chmod +x", ['$root/../bin/haxelib']);
+                        }
 						link('$root/../std', '$root/../releases/${args[0]}/std');   
                     } else {
                         Sys.println("Not a valid release or version");
