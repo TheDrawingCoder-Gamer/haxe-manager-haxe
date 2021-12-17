@@ -1,4 +1,6 @@
-bin
+bin/*
+!bin/hx
+!bin/hx.bat
 std
 releases
 versions

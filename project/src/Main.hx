@@ -113,6 +113,7 @@ class Main {
                             Sys.setCwd(oldCwd);
                             safeDelete('$root/../versions/$target');
                             link(Path.join([root, "../versions/", target]), Path.join([root, "../releases/", outdir]));
+                            Sys.println("Successfully added version " + target);
                             Sys.exit(0);
                         case Failure(failure):
                             Sys.println("Failed to connect : (");
@@ -129,11 +130,11 @@ class Main {
                         link('$root/haxelib', '$root/../versions/${args[0]}/haxelib',true);   
                         link('$root/../std', '$root/../versions/${args[0]}/std');   
                     } else if (FileSystem.exists('$root/../releases/${args[0]}')) {
-						safeDelete('$root/haxe');
-						safeDelete('$root/haxelib');
+						safeDelete('$root/../bin/haxe');
+						safeDelete('$root/../bin/haxelib');
 						safeDelete('$root/../std');
-						link('$root/haxe', '$root/../releases/${args[0]}/haxe', true);
-						link('$root/haxelib', '$root/../releases/${args[0]}/haxelib', true);
+						link('$root/../bin/haxe', '$root/../releases/${args[0]}/haxe', true);
+						link('$root/../bin/haxelib', '$root/../releases/${args[0]}/haxelib', true);
 						link('$root/../std', '$root/../releases/${args[0]}/std');   
                     } else {
                         Sys.println("Not a valid release or version");

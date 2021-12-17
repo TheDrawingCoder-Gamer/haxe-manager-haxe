@@ -1,0 +1,2 @@
+ROOT=$(dirname $(realpath $0))
+hl "$ROOT/hx.hl" "$@"
