@@ -1,3 +1,3 @@
 @ECHO off
 
-hl "%~dp0\\hx.hl" "%*"
+hl "%~dp0\\hx.hl" %*

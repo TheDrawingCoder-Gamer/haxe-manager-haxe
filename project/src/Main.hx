@@ -8,6 +8,7 @@ import tink.http.Fetch;
 // Make the haxe manager in haxe
 // This will cause no issues : )
 class Main {
+    static var root:String;
     public static function main() {
         var platform = "";
         switch (Sys.systemName()) {
@@ -25,7 +26,7 @@ class Main {
         }
         var args = Sys.args();
         var cmd = args.shift();
-        var root = Path.normalize(Path.join([Sys.programPath(), ".."]));
+        root = Path.normalize(Path.join([Sys.programPath(), ".."]));
         if (!FileSystem.exists('$root/../releases'))
 			FileSystem.createDirectory('$root/../releases');
 		if (!FileSystem.exists('$root/../versions')) {
@@ -175,24 +176,28 @@ class Main {
                 });
             case "select": 
                 if (args[0] != null) {
-                    if (FileSystem.exists('$root/../versions/${args[0]}')) {
-                        safeDelete('$root/haxe');
-                        safeDelete('$root/haxelib');
-                        safeDelete('$root/../std');
-                        link('$root/haxe', '$root/../versions/${args[0]}/haxe',true);  
-                        link('$root/haxelib', '$root/../versions/${args[0]}/haxelib',true);   
-                        link('$root/../std', '$root/../versions/${args[0]}/std');   
-                    } else if (FileSystem.exists('$root/../releases/${args[0]}')) {
+                    var doingVersion;
+					if ((doingVersion = FileSystem.exists('$root/../versions/${args[0]}'))
+						|| FileSystem.exists('$root/../releases/${args[0]}')) {
+                        var folder = doingVersion ? 'versions' : 'releases';
 						safeDelete('$root/../bin/haxe');
 						safeDelete('$root/../bin/haxelib');
-						safeDelete('$root/../std');
-						link('$root/../bin/haxe', '$root/../releases/${args[0]}/haxe', true);
-						link('$root/../bin/haxelib', '$root/../releases/${args[0]}/haxelib', true);
-                        if (platform != "windows") {
+						safeDelete('$root/../bin/haxe.exe');
+						safeDelete('$root/../bin/haxelib.exe');
+						if (platform != "windows")
+							safeDelete('$root/../std');
+						else
+							deleteDirectory('$root/../std');
+						if (platform != "windows") {
+							link('$root/../bin/haxe', '$root/../$folder/${args[0]}/haxe', true);
+							link('$root/../bin/haxelib', '$root/../$folder/${args[0]}/haxelib', true);
 							Sys.command("chmod +x", ['$root/../bin/haxe']);
 							Sys.command("chmod +x", ['$root/../bin/haxelib']);
-                        }
-						link('$root/../std', '$root/../releases/${args[0]}/std');   
+						} else {
+							link('$root/../bin/haxe.exe', '$root/../$folder/${args[0]}/haxe.exe', true);
+							link('$root/../bin/haxelib.exe', '$root/../$folder/${args[0]}/haxelib.exe', true);
+						}
+						link('$root/../std', '$root/../$folder/${args[0]}/std');   
                     } else {
                         Sys.println("Not a valid release or version");
                         Sys.exit(1);
@@ -235,26 +240,34 @@ class Main {
         if (FileSystem.exists(file))
             FileSystem.deleteFile(file);
     }
+    static function deleteDirectory(dir:String) {
+        if (FileSystem.exists(dir))
+            FileSystem.deleteDirectory(dir);
+    }
     static function link(to:String, from:String, file:Bool = false) {
+        // TODO: Windows actually doesn't work at all
         switch (Sys.systemName()) {
             case "Windows": 
                 var result = 0;
                 if (file) {
-                    result = Sys.command("mklink", [
-                        to,
-                        from
+					result = Sys.command('$root/winsudo.bat', [
+                        "mklink",
+                        '"' + to + '"',
+                        '"' + from + '"',
                     ]);
                 }   
                 else  {
-                    result = Sys.command("mklink", [
-                        "/d",
-                        to,
-                        from,
+                    // TODO: Windows doesn't handle soft directory symlinks well : (
+					result = Sys.command('$root/winsudo.bat', [
+					    "mklink",
+                        "/j",
+                        '"' + to + '"',
+                        '"' + from + '"',
                     ]);
                 }
                 if (result != 0) {
                     Sys.println("Windows requires admin privledges to link files (stupid, i know)");
-                    Sys.println("Please run this command as an admin");
+					Sys.println("You should have seen a UAC prompt. If not, make sure you have powershell installed.");
                     Sys.exit(1);
                 }
                     
